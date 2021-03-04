@@ -14,6 +14,7 @@ class MyWindow(QtWidgets.QMainWindow):
     signal = QtCore.pyqtSignal(bool)
     signal_input = QtCore.pyqtSignal(bool)
     signal_cheker = QtCore.pyqtSignal(bool)
+
     def __init__(self):
         super(MyWindow, self).__init__()
         self.ui = Ui_MainWindow()
