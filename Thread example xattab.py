@@ -8,6 +8,7 @@ from bs4 import BeautifulSoup
 import os
 import csv
 import time
+import fake_useragent
 
 
 class MyWindow(QtWidgets.QMainWindow):
@@ -26,6 +27,7 @@ class MyWindow(QtWidgets.QMainWindow):
         self.signal.connect(self.parser.start)
         self.signal_input.connect(self.parser.input_line)
         self.signal_cheker.connect(self.parser.csv_creat)
+        self.parser.signal.connect(self.warning_msg)
 
         self.ui.startbutton.clicked.connect(self.start_signal)
         self.ui.pagesbutton.clicked.connect(self.input_signal)
@@ -42,6 +44,15 @@ class MyWindow(QtWidgets.QMainWindow):
     def csv_signal(self):
         self.signal_cheker.emit(True)
 
+    @QtCore.pyqtSlot(int)
+    def warning_msg(self, value):
+        if value == 0:
+            self.warning = WarningMsg(0)
+        if value == 1:
+            self.warning = WarningMsg(flag=1, last_page=self.parser.last_page)
+        self.warning.setWindowModality(2)
+        self.warning.show()
+
 
 ###############################################################
 
@@ -50,9 +61,9 @@ class Parser(QtCore.QObject):
     def __init__(self, mywindow, parent=None):
         super(Parser, self).__init__(parent)
         self.mywindow = mywindow
-
+        self.user_agent = fake_useragent.UserAgent()
         self.headers = {
-            "port": "25565", "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.182 Safari/537.36 Edg/88.0.705.81","accept": "*/*"}
+            "port": "25565", "user-agent": self.creat_user_agent(), "accept": "*/*"}
         self.Games = {}
         self.default = {"number": None, "Год выхода": None, "Жанр": None, "Размер": None, "Таблетка": None,
                         "Ссылка": None}
@@ -64,6 +75,11 @@ class Parser(QtCore.QObject):
         self.html = None
         self.game_number = 1
         self.warning = None
+        print("__init__ end")
+
+    @staticmethod
+    def creat_user_agent():
+        return fake_useragent.UserAgent().random
 
     @QtCore.pyqtSlot(bool)
     def start(self):
@@ -79,6 +95,7 @@ class Parser(QtCore.QObject):
         return actual_link
 
     def get_html(self, link, page=1):
+        print("start get html")
         if page == 1:
             url = requests.get(link, headers=self.headers)
         else:
@@ -90,8 +107,10 @@ class Parser(QtCore.QObject):
             print("error")
 
     def get_last_page(self):
-        self.get_html(self.actual_link)
+        print("start last page")
+        self.html = self.get_html(self.actual_link)
         last_page = int(self.html.find("div", class_="pagination").find_all("a")[-1].get_text())
+
         return int(last_page)
 
     def parser(self):
@@ -119,30 +138,30 @@ class Parser(QtCore.QObject):
                         self.Games[b_name]["Год выхода"] = i
                 except:
                     self.Games[b_name]["Год выхода"] = "Не указано"
-            self.Games[b_name]["Жанр"] = self.game_details[2].split(": ")[1]
-            self.Games[b_name]["Размер"] = self.game_html.find("span", class_="entry__info-size").get_text()
-            self.Games[b_name]["Таблетка"] = self.game_details[-2].split(": ")[1]
+            self.Games[b_name]["Жанр"] = game_details[2].split(": ")[1]
+            self.Games[b_name]["Размер"] = game_html.find("span", class_="entry__info-size").get_text()
+            self.Games[b_name]["Таблетка"] = game_details[-2].split(": ")[1]
             self.Games[b_name]["Ссылка"] = game.find("a")["href"]
             self.Games[b_name]["number"] = self.game_number
             self.info_block()
             self.game_number += 1
             time.sleep(1)
 
+    signal = QtCore.pyqtSignal(int)
+
     @QtCore.pyqtSlot(bool)
     def input_line(self):
+        print("start_input")
         if self.mywindow.ui.InputLine.text():
             pages = int(self.mywindow.ui.InputLine.text())
         else:
             pages = int(self.mywindow.ui.PagesNow.text())
-        if pages > 5:
-            self.warning = WarningMsg(0)
-            self.warning.setWindowModality(2)
-            self.warning.show()
         self.last_page = self.get_last_page()
+        if self.last_page >= pages > 5:
+            self.signal.emit(0)
         if pages > self.last_page:
-            self.warning = WarningMsg(flag=1, last_page=self.last_page)
-            self.warning.show()
-            pages = int(self.ui.PagesNow.text())
+            self.signal.emit(1)
+            pages = int(self.mywindow.ui.PagesNow.text())
         self.mywindow.ui.PagesNow.setText(str(pages))
         self.pages = pages
 
