@@ -23,6 +23,7 @@ class MyWindow(QtWidgets.QMainWindow):
 
         self.parser = Parser(mywindow=self)
         self.thread_1 = QtCore.QThread()
+        self.thread_2 = QtCore.QThread()
         self.parser.moveToThread(self.thread_1)
         self.signal.connect(self.parser.start)
         self.signal_input.connect(self.parser.input_line)
@@ -59,7 +60,9 @@ class MyWindow(QtWidgets.QMainWindow):
 
     @QtCore.pyqtSlot(bool)
     def table_call(self):
-        self.table = Table(self.parser.Games)
+        self.table = Table(games=self.parser.Games, mywindow=self)
+        self.table.moveToThread(self.thread_2)
+        self.thread_2.start()
         self.table.show()
 
     @QtCore.pyqtSlot(int)
@@ -152,26 +155,30 @@ class Parser(QtCore.QObject):
             self.table_creat()
 
     def get_data(self, html):
-        for game in html.find_all("div", class_="entry_content"):
-            game_html = self.get_html(game.find("a")["href"])
-            b_name = (game_html.find("h1", class_="inner-entry__title").get_text().split("]"))[0]+"]"
-            print(f"{b_name} началась")
-            self.Games[b_name] = self.default.copy()
-            game_details = game_html.find("div", class_="inner-entry__details").get_text().split("\n")
-            year = game_details[1].replace('Год выпуска:  ', "").split()
-            for i in year:
-                try:
-                    if i.isdigit() and int(i) // 1000 != 0:
-                        self.Games[b_name]["Год выхода"] = i
-                except:
-                    self.Games[b_name]["Год выхода"] = "Не указано"
-            self.Games[b_name]["Жанр"] = game_details[2].split(": ")[1]
-            self.Games[b_name]["Размер"] = game_html.find("span", class_="entry__info-size").get_text()
-            self.Games[b_name]["Таблетка"] = game_details[-2].split(": ")[1]
-            self.Games[b_name]["Ссылка"] = game.find("a")["href"]
-            self.Games[b_name]["number"] = self.game_number
-            self.game_number += 1
-            time.sleep(1)
+        try:
+            for game in html.find_all("div", class_="entry_content"):
+                game_html = self.get_html(game.find("a")["href"])
+                b_name = (game_html.find("h1", class_="inner-entry__title").get_text().split("]"))[0]+"]"
+                print(f"{b_name} началась")
+                self.Games[b_name] = self.default.copy()
+                game_details = game_html.find("div", class_="inner-entry__details").get_text().split("\n")
+                year = game_details[1].replace('Год выпуска:  ', "").split()
+                for i in year:
+                    try:
+                        if i.isdigit() and int(i) // 1000 != 0:
+                            self.Games[b_name]["Год выхода"] = i
+                    except:
+                        self.Games[b_name]["Год выхода"] = "Не указано"
+                self.Games[b_name]["Жанр"] = game_details[2].split(": ")[1]
+                self.Games[b_name]["Размер"] = game_html.find("span", class_="entry__info-size").get_text()
+                self.Games[b_name]["Таблетка"] = game_details[-2].split(": ")[1]
+                self.Games[b_name]["Ссылка"] = game.find("a")["href"]
+                self.Games[b_name]["number"] = self.game_number
+                self.game_number += 1
+                time.sleep(1)
+        except:
+            print("error")
+            self.call_warning.emit(2)
 
     @QtCore.pyqtSlot(bool)
     def input_line(self):
@@ -220,6 +227,8 @@ class Parser(QtCore.QObject):
         if self.mywindow.ui.opencheck.isChecked():
             os.startfile(self.file_path)
 
+    mywindow.thread_1.stop()
+
 
 
 class WarningMsg(QtWidgets.QWidget):
@@ -245,36 +254,38 @@ class WarningMsg(QtWidgets.QWidget):
         self.ui.label.setText("К сожалению, сайт недоступен, повторите попытку позже")
 
 
-class Table(QtWidgets.QTableWidget):
-    def __init__(self, games):
+class Table(QtWidgets.QWidget):
+    def __init__(self, mywindow, games):
         self.Games = games
+        self.tablewindow = mywindow
         super().__init__()
-        self.ui = Ui_Table()
-        self.ui.setupUi(self)
+        self.tablewindow.ui = Ui_Table()
+        self.tablewindow.ui.setupUi(self)
         self.columns = 6
-        self.ui.tableWidget.setColumnCount(self.columns)  # Количество распарсенных параметров
+        self.tablewindow.ui.tableWidget.setColumnCount(self.columns)  # Количество распарсенных параметров
         self.rows = len(self.Games.keys())
-        self.ui.tableWidget.setRowCount(self.rows)  # Просчитать количество игр в словаре(Games.keys())
+        self.tablewindow.ui.tableWidget.setRowCount(self.rows)  # Просчитать количество игр в словаре(Games.keys())
         headers_h = list(list(self.Games.items())[0][1].keys())
         headers_v = list(self.Games.keys())
-        self.ui.tableWidget.setHorizontalHeaderLabels(headers_h)
-        self.ui.tableWidget.setVerticalHeaderLabels(headers_v)
+        self.tablewindow.ui.tableWidget.setHorizontalHeaderLabels(headers_h)
+        self.tablewindow.ui.tableWidget.setVerticalHeaderLabels(headers_v)
 
         for row in self.Games.keys():
             column_now = 0
             for column in list(self.Games.items())[self.Games[row]["number"] - 1][1].keys():
                 if column == "Ссылка":
-                    self.lable = QtWidgets.QLabel(self.ui.tableWidget)
+                    self.lable = QtWidgets.QLabel(self.tablewindow.ui.tableWidget)
                     self.lable.setText(f'<a href="{self.Games[row]["Ссылка"]}"> Ссылка </a>')
                     self.lable.setOpenExternalLinks(True)
-                    self.ui.tableWidget.setCellWidget(self.Games[row]["number"] - 1, column_now, self.lable)
+                    self.tablewindow.ui.tableWidget.setCellWidget(self.Games[row]["number"] - 1, column_now, self.lable)
                 else:
-                    self.ui.tableWidget.setItem(self.Games[row]["number"] - 1, column_now, QtWidgets.QTableWidgetItem(str(self.Games[row][column])))
+                    self.tablewindow.ui.tableWidget.setItem(self.Games[row]["number"] - 1, column_now, QtWidgets.QTableWidgetItem(str(self.Games[row][column])))
                 column_now += 1
+        print("table_succes")
 
 
 if __name__ == "__main__":
-    app = QtWidgets.QApplication([])
+    app = QtWidgets.QApplication(sys.argv)
     application = MyWindow()
     application.show()
-    sys.exit(app.exec())
+    sys.exit(app.exec_())
