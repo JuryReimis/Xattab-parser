@@ -7,7 +7,7 @@ import requests
 from bs4 import BeautifulSoup
 import os
 import csv
-# import time
+import time
 
 
 class MyWindow(QtWidgets.QMainWindow):
@@ -89,6 +89,7 @@ class Parser(QtCore.QObject):
         for page in range(1, self.pages + 1):
             self.info_block(page)
             self.get_data()
+            time.sleep(1)
         if self.csv_creat():
             self.writer_csv()
         if self.mywindow.ui.opencheck.isChecked():
@@ -116,6 +117,7 @@ class Parser(QtCore.QObject):
             self.Games[b_name]["number"] = self.game_number
             self.info_block()
             self.game_number += 1
+            time.sleep(1)
 
     def input_line(self):
         if self.mywindow.ui.InputLine.text():
