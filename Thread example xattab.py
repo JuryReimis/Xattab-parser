@@ -28,6 +28,8 @@ class MyWindow(QtWidgets.QMainWindow):
         self.signal_input.connect(self.parser.input_line)
         self.signal_cheker.connect(self.parser.csv_creat)
         self.parser.signal.connect(self.warning_msg)
+        self.parser.call_table.connect(self.table_call)
+        self.parser.info_block.connect(self.info_block)
 
         self.ui.startbutton.clicked.connect(self.start_signal)
         self.ui.pagesbutton.clicked.connect(self.input_signal)
@@ -53,6 +55,19 @@ class MyWindow(QtWidgets.QMainWindow):
         self.warning.setWindowModality(2)
         self.warning.show()
 
+    @QtCore.pyqtSlot(bool)
+    def table_call(self):
+        self.table = Table(self.parser.Games)
+        self.table.show()
+
+    @QtCore.pyqtSlot(str, int)
+    def info_block(self, flag, page):
+        if flag == "progress":
+            full_progress = int(self.parser.pages) / 100  # float
+            self.ui.progressBar.setValue((1 / full_progress) * int(page))
+        else:
+            self.ui.parsing_status.setText(f"Парсинг страницы {page+1}...")
+
 
 ###############################################################
 
@@ -71,11 +86,10 @@ class Parser(QtCore.QObject):
 
         self.actual_link = self.get_actual_link()
         self.last_page = None
-        self.pages = self.mywindow.ui.PagesNow.text()
+        self.pages = int(self.mywindow.ui.PagesNow.text())
         self.html = None
         self.game_number = 1
         self.warning = None
-        print("__init__ end")
 
     @staticmethod
     def creat_user_agent():
@@ -95,11 +109,10 @@ class Parser(QtCore.QObject):
         return actual_link
 
     def get_html(self, link, page=1):
-        print("start get html")
         if page == 1:
-            url = requests.get(link, headers=self.headers)
+            url = requests.get(link, headers=self.headers, timeout=50)
         else:
-            url = requests.get(link + "/page/" + str(page))
+            url = requests.get(link + "/page/" + str(page), headers=self.headers, timeout=50)
         if url.status_code == 200:
             html = BeautifulSoup(url.text, "html.parser")
             return html
@@ -107,17 +120,21 @@ class Parser(QtCore.QObject):
             print("error")
 
     def get_last_page(self):
-        print("start last page")
         self.html = self.get_html(self.actual_link)
         last_page = int(self.html.find("div", class_="pagination").find_all("a")[-1].get_text())
 
         return int(last_page)
 
+    info_block = QtCore.pyqtSignal(str, int)
+
     def parser(self):
         for page in range(1, self.pages + 1):
-            self.info_block(page)
-            self.get_data()
+            self.info_block.emit("progress", 0)
+            self.get_data(self.get_html(link=self.actual_link, page=page))
             time.sleep(1)
+            if page != self.pages - 1:
+                self.info_block.emit("0", page)
+        self.mywindow.ui.parsing_status.setText("Парсинг закончен!")
         if self.csv_creat():
             self.writer_csv()
         if self.mywindow.ui.opencheck.isChecked():
@@ -125,10 +142,11 @@ class Parser(QtCore.QObject):
         if self.mywindow.ui.tablecheck.isChecked():
             self.table_creat()
 
-    def get_data(self):
-        for game in self.html.find_all("div", class_="entry_content"):
+    def get_data(self, html):
+        for game in html.find_all("div", class_="entry_content"):
             game_html = self.get_html(game.find("a")["href"])
             b_name = (game_html.find("h1", class_="inner-entry__title").get_text().split("]"))[0]+"]"
+            print(f"{b_name} началась")
             self.Games[b_name] = self.default.copy()
             game_details = game_html.find("div", class_="inner-entry__details").get_text().split("\n")
             year = game_details[1].replace('Год выпуска:  ', "").split()
@@ -143,7 +161,6 @@ class Parser(QtCore.QObject):
             self.Games[b_name]["Таблетка"] = game_details[-2].split(": ")[1]
             self.Games[b_name]["Ссылка"] = game.find("a")["href"]
             self.Games[b_name]["number"] = self.game_number
-            self.info_block()
             self.game_number += 1
             time.sleep(1)
 
@@ -151,7 +168,6 @@ class Parser(QtCore.QObject):
 
     @QtCore.pyqtSlot(bool)
     def input_line(self):
-        print("start_input")
         if self.mywindow.ui.InputLine.text():
             pages = int(self.mywindow.ui.InputLine.text())
         else:
@@ -186,22 +202,16 @@ class Parser(QtCore.QObject):
             self.mywindow.ui.opencheck.setChecked(False)
             return False
 
+    call_table = QtCore.pyqtSignal(bool)
+
     def table_creat(self):
         self.mywindow.ui.parsing_status.setText("Создаю таблицу...")
         if self.mywindow.ui.tablecheck.isChecked():
-            table = Table(self.Games)
-            table.show()
+            self.call_table.emit(True)
 
     def open_file(self):
         if self.mywindow.ui.opencheck.isChecked():
             os.startfile(self.file_path)
-
-    def info_block(self, page=0):
-        if page == 0:
-            full_progress = int(self.pages) / 100  # float
-            self.mywindow.ui.progressBar.setValue((1 / full_progress) * int(page + 1))
-        else:
-            self.mywindow.ui.parsing_status.setText(f"Парсинг страницы {page}...")
 
 
 class WarningMsg(QtWidgets.QWidget):
