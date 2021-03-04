@@ -12,7 +12,8 @@ import time
 
 class MyWindow(QtWidgets.QMainWindow):
     signal = QtCore.pyqtSignal(bool)
-
+    signal_input = QtCore.pyqtSignal(bool)
+    signal_cheker = QtCore.pyqtSignal(bool)
     def __init__(self):
         super(MyWindow, self).__init__()
         self.ui = Ui_MainWindow()
@@ -21,24 +22,30 @@ class MyWindow(QtWidgets.QMainWindow):
         self.parser = Parser(mywindow=self)
         self.thread_1 = QtCore.QThread()
         self.parser.moveToThread(self.thread_1)
-        self.signal.connect(self.parser.start())
+        self.signal.connect(self.parser.start)
+        self.signal_input.connect(self.parser.input_line)
+        self.signal_cheker.connect(self.parser.csv_creat)
 
         self.ui.startbutton.clicked.connect(self.start_signal)
+        self.ui.pagesbutton.clicked.connect(self.input_signal)
+        self.ui.csvcreatcheck.clicked.connect(self.csv_signal)
 
-        self.ui.pagesbutton.clicked.connect(self.inputline)
-
-        self.ui.csvcreatcheck.clicked.connect(self.csv_creat)
+        self.thread_1.start()
 
     def start_signal(self):
         self.signal.emit(True)
+
+    def input_signal(self):
+        self.signal_input.emit(True)
+
+    def csv_signal(self):
+        self.signal_cheker.emit(True)
 
 
 ###############################################################
 
 
 class Parser(QtCore.QObject):
-    signal = QtCore.pyqtSignal()
-
     def __init__(self, mywindow, parent=None):
         super(Parser, self).__init__(parent)
         self.mywindow = mywindow
@@ -51,15 +58,16 @@ class Parser(QtCore.QObject):
         self.file_path = "repacks by xattab.csv"
 
         self.actual_link = self.get_actual_link()
-        self.last_page = self.get_last_page()
-        self.pages = self.input_line()
-        self.html = self.get_html(self.actual_link, self.pages)
+        self.last_page = None
+        self.pages = self.mywindow.ui.PagesNow.text()
+        self.html = None
         self.game_number = 1
         self.warning = None
 
     @QtCore.pyqtSlot(bool)
     def start(self):
         self.mywindow.ui.parsing_status.setText("Парсинг начинается!")
+        self.html = self.get_html(self.actual_link, self.pages)
         self.parser()
         self.mywindow.ui.parsing_status.setText("Операция завершена!")
 
@@ -83,7 +91,7 @@ class Parser(QtCore.QObject):
     def get_last_page(self):
         self.get_html(self.actual_link)
         last_page = int(self.html.find("div", class_="pagination").find_all("a")[-1].get_text())
-        return last_page
+        return int(last_page)
 
     def parser(self):
         for page in range(1, self.pages + 1):
@@ -119,6 +127,7 @@ class Parser(QtCore.QObject):
             self.game_number += 1
             time.sleep(1)
 
+    @QtCore.pyqtSlot(bool)
     def input_line(self):
         if self.mywindow.ui.InputLine.text():
             pages = int(self.mywindow.ui.InputLine.text())
@@ -128,12 +137,13 @@ class Parser(QtCore.QObject):
             self.warning = WarningMsg(0)
             self.warning.setWindowModality(2)
             self.warning.show()
+        self.last_page = self.get_last_page()
         if pages > self.last_page:
             self.warning = WarningMsg(flag=1, last_page=self.last_page)
             self.warning.show()
             pages = int(self.ui.PagesNow.text())
         self.mywindow.ui.PagesNow.setText(str(pages))
-        return pages
+        self.pages = pages
 
     def writer_csv(self):
         self.mywindow.ui.parsing_status.setText("Записываю в файл...")
@@ -146,6 +156,7 @@ class Parser(QtCore.QObject):
                 writer_game.writerow({"Игра": item[0]})
                 writer.writerow(item[1])
 
+    @QtCore.pyqtSlot(bool)
     def csv_creat(self):
         if self.mywindow.ui.csvcreatcheck.isChecked():
             self.mywindow.ui.opencheck.setEnabled(True)
