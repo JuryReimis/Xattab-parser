@@ -23,7 +23,6 @@ class MyWindow(QtWidgets.QMainWindow):
 
         self.parser = Parser(mywindow=self)
         self.thread_1 = QtCore.QThread()
-        self.thread_2 = QtCore.QThread()
         self.parser.moveToThread(self.thread_1)
         self.signal.connect(self.parser.start)
         self.signal_input.connect(self.parser.input_line)
@@ -60,9 +59,8 @@ class MyWindow(QtWidgets.QMainWindow):
 
     @QtCore.pyqtSlot(bool)
     def table_call(self):
-        self.table = Table(games=self.parser.Games, mywindow=self)
-        self.table.moveToThread(self.thread_2)
-        self.thread_2.start()
+        self.table = Table(mywindow=self, games=self.parser.Games)
+        self.table.table_creat()
         self.table.show()
 
     @QtCore.pyqtSlot(int)
@@ -115,7 +113,7 @@ class Parser(QtCore.QObject):
             actual_link = self.get_html(actual_url).find("input")["value"]
             return actual_link
         except:
-            self.call_warning.emit(2)
+            print("error in actual link")
     def get_html(self, link, page=1):
         try:
             if page == 1:
@@ -128,7 +126,7 @@ class Parser(QtCore.QObject):
             else:
                 print("error")
         except:
-            self.call_warning.emit(2)
+            print("error in ge html")
 
     def get_last_page(self):
         try:
@@ -136,7 +134,7 @@ class Parser(QtCore.QObject):
             last_page = int(self.html.find("div", class_="pagination").find_all("a")[-1].get_text())
             return int(last_page)
         except:
-            self.call_warning.emit(2)
+            print("error in get last page")
 
     def parser(self):
         self.mywindow.ui.parsing_status.setText("Парсинг страницы 1...")
@@ -175,10 +173,9 @@ class Parser(QtCore.QObject):
                 self.Games[b_name]["Ссылка"] = game.find("a")["href"]
                 self.Games[b_name]["number"] = self.game_number
                 self.game_number += 1
-                time.sleep(1)
+                time.sleep(0.2)
         except:
             print("error")
-            self.call_warning.emit(2)
 
     @QtCore.pyqtSlot(bool)
     def input_line(self):
@@ -227,7 +224,8 @@ class Parser(QtCore.QObject):
         if self.mywindow.ui.opencheck.isChecked():
             os.startfile(self.file_path)
 
-    mywindow.thread_1.stop()
+    print("parser is working")
+
 
 
 
@@ -259,27 +257,28 @@ class Table(QtWidgets.QWidget):
         self.Games = games
         self.tablewindow = mywindow
         super().__init__()
-        self.tablewindow.ui = Ui_Table()
-        self.tablewindow.ui.setupUi(self)
+        self.ui_table = Ui_Table()
+        self.ui_table.setupUi(self)
         self.columns = 6
-        self.tablewindow.ui.tableWidget.setColumnCount(self.columns)  # Количество распарсенных параметров
+        self.ui_table.tableWidget.setColumnCount(self.columns)  # Количество распарсенных параметров
         self.rows = len(self.Games.keys())
-        self.tablewindow.ui.tableWidget.setRowCount(self.rows)  # Просчитать количество игр в словаре(Games.keys())
+        self.ui_table.tableWidget.setRowCount(self.rows)  # Просчитать количество игр в словаре(Games.keys())
         headers_h = list(list(self.Games.items())[0][1].keys())
         headers_v = list(self.Games.keys())
-        self.tablewindow.ui.tableWidget.setHorizontalHeaderLabels(headers_h)
-        self.tablewindow.ui.tableWidget.setVerticalHeaderLabels(headers_v)
+        self.ui_table.tableWidget.setHorizontalHeaderLabels(headers_h)
+        self.ui_table.tableWidget.setVerticalHeaderLabels(headers_v)
 
+    def table_creat(self):
         for row in self.Games.keys():
             column_now = 0
             for column in list(self.Games.items())[self.Games[row]["number"] - 1][1].keys():
                 if column == "Ссылка":
-                    self.lable = QtWidgets.QLabel(self.tablewindow.ui.tableWidget)
+                    self.lable = QtWidgets.QLabel(self.ui_table.tableWidget)
                     self.lable.setText(f'<a href="{self.Games[row]["Ссылка"]}"> Ссылка </a>')
                     self.lable.setOpenExternalLinks(True)
-                    self.tablewindow.ui.tableWidget.setCellWidget(self.Games[row]["number"] - 1, column_now, self.lable)
+                    self.ui_table.tableWidget.setCellWidget(self.Games[row]["number"] - 1, column_now, self.lable)
                 else:
-                    self.tablewindow.ui.tableWidget.setItem(self.Games[row]["number"] - 1, column_now, QtWidgets.QTableWidgetItem(str(self.Games[row][column])))
+                    self.ui_table.tableWidget.setItem(self.Games[row]["number"] - 1, column_now, QtWidgets.QTableWidgetItem(str(self.Games[row][column])))
                 column_now += 1
         print("table_succes")
 
