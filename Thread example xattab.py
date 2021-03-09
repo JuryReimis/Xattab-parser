@@ -15,21 +15,19 @@ class MyWindow(QtWidgets.QMainWindow):
     signal = QtCore.pyqtSignal(bool)
     signal_input = QtCore.pyqtSignal(bool)
     signal_cheker = QtCore.pyqtSignal(bool)
-
-    def __init__(self):
-        super(MyWindow, self).__init__()
+    thread_1 = QtCore.QThread(parent=None)
+    def __init__(self, parent=None):
+        super(MyWindow, self).__init__(parent)
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
 
         self.parser = Parser(mywindow=self)
-        self.thread_1 = QtCore.QThread(parent=self)
+
         self.parser.moveToThread(self.thread_1)
         self.signal.connect(self.parser.start)
         self.signal_input.connect(self.parser.input_line)
         self.signal_cheker.connect(self.parser.csv_creat)
-        self.parser.call_warning.connect(self.warning_msg)
-        self.parser.call_table.connect(self.table_call)
-        self.parser.info_block.connect(self.info_block)
+
 
         self.ui.startbutton.clicked.connect(self.start_signal)
         self.ui.pagesbutton.clicked.connect(self.input_signal)
@@ -58,10 +56,8 @@ class MyWindow(QtWidgets.QMainWindow):
 
     @QtCore.pyqtSlot(dict)
     def table_call(self, dict):
-        print(self.thread_1.isFinished())
         self.games = dict
         self.table = Table(mywindow=self, games=self.games)
-        self.table.setWindowModality(1)
         self.table.table_creat()
         self.table.show()
 
@@ -79,8 +75,8 @@ class Parser(QtCore.QObject):
     call_warning = QtCore.pyqtSignal(int)
     call_table = QtCore.pyqtSignal(dict)
     info_block = QtCore.pyqtSignal(int)
-    def __init__(self, mywindow):
-        super().__init__()
+    def __init__(self, mywindow, parent=None):
+        super(Parser,self).__init__(parent)
         self.mywindow = mywindow
         self.user_agent = fake_useragent.UserAgent()
         self.headers = {
@@ -96,6 +92,9 @@ class Parser(QtCore.QObject):
         self.html = None
         self.game_number = 1
         self.warning = None
+        self.call_warning.connect(self.mywindow.warning_msg)
+        self.call_table.connect(self.mywindow.table_call)
+        self.info_block.connect(self.mywindow.info_block)
 
     @staticmethod
     def creat_user_agent():
@@ -147,7 +146,6 @@ class Parser(QtCore.QObject):
             time.sleep(1)
             if page < self.pages:
                 self.info_block.emit(page)
-        self.mywindow.ui.progressBar.setValue(100)
         self.mywindow.ui.parsing_status.setText("Парсинг закончен!")
         if self.csv_creat():
             self.writer_csv()
@@ -236,8 +234,8 @@ class WarningMsg(QtWidgets.QWidget):
             self.more_5()
         elif flag == 1:
             self.more_max()
-        elif flag == 2:
-            self.site_error()
+        #elif flag == 2:
+        #    self.site_error()
 
     def more_5(self):
         self.ui.label.setText("Внимание, парсинг больше 5 страниц может занять значительное время!")
@@ -245,8 +243,8 @@ class WarningMsg(QtWidgets.QWidget):
     def more_max(self):
         self.ui.label.setText(f"На сайте нет столько страниц! Последняя страница №{self.last_page}")
 
-    def site_error(self):
-        self.ui.label.setText("К сожалению, сайт недоступен, повторите попытку позже")
+    #def site_error(self):
+    #    self.ui.label.setText("К сожалению, сайт недоступен, повторите попытку позже")
 
 
 class Table(QtWidgets.QWidget):
