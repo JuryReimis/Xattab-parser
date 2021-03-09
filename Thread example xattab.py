@@ -16,6 +16,7 @@ class MyWindow(QtWidgets.QMainWindow):
     signal_input = QtCore.pyqtSignal(bool)
     signal_cheker = QtCore.pyqtSignal(bool)
     thread_1 = QtCore.QThread(parent=None)
+
     def __init__(self, parent=None):
         super(MyWindow, self).__init__(parent)
         self.ui = Ui_MainWindow()
@@ -27,7 +28,6 @@ class MyWindow(QtWidgets.QMainWindow):
         self.signal.connect(self.parser.start)
         self.signal_input.connect(self.parser.input_line)
         self.signal_cheker.connect(self.parser.csv_creat)
-
 
         self.ui.startbutton.clicked.connect(self.start_signal)
         self.ui.pagesbutton.clicked.connect(self.input_signal)
@@ -62,10 +62,11 @@ class MyWindow(QtWidgets.QMainWindow):
         self.table.show()
 
     @QtCore.pyqtSlot(int)
-    def info_block(self, page):
+    def info_block(self, page, flag=None):
         full_progress = int(self.parser.pages) / 100  # float
         self.ui.progressBar.setValue((1 / full_progress) * int(page))
-        self.ui.parsing_status.setText(f"Парсинг страницы {page+1}...")
+        if page < self.parser.pages:
+            self.ui.parsing_status.setText(f"Парсинг страницы {page+1}...")
 
 
 ###############################################################
@@ -115,7 +116,8 @@ class Parser(QtCore.QObject):
             actual_link = self.get_html(actual_url).find("input")["value"]
             return actual_link
         except:
-            print("error in actual link")
+            self.call_warning.emit(2)
+
     def get_html(self, link, page=1):
         try:
             if page == 1:
@@ -128,7 +130,7 @@ class Parser(QtCore.QObject):
             else:
                 print("error")
         except:
-            print("error in ge html")
+            self.call_warning.emit(2)
 
     def get_last_page(self):
         try:
@@ -144,8 +146,7 @@ class Parser(QtCore.QObject):
             print(f"page {page}")
             self.get_data(self.get_html(link=self.actual_link, page=page))
             time.sleep(1)
-            if page < self.pages:
-                self.info_block.emit(page)
+            self.info_block.emit(page)
         self.mywindow.ui.parsing_status.setText("Парсинг закончен!")
         if self.csv_creat():
             self.writer_csv()
@@ -234,8 +235,8 @@ class WarningMsg(QtWidgets.QWidget):
             self.more_5()
         elif flag == 1:
             self.more_max()
-        #elif flag == 2:
-        #    self.site_error()
+        elif flag == 2:
+            self.site_error()
 
     def more_5(self):
         self.ui.label.setText("Внимание, парсинг больше 5 страниц может занять значительное время!")
@@ -243,8 +244,8 @@ class WarningMsg(QtWidgets.QWidget):
     def more_max(self):
         self.ui.label.setText(f"На сайте нет столько страниц! Последняя страница №{self.last_page}")
 
-    #def site_error(self):
-    #    self.ui.label.setText("К сожалению, сайт недоступен, повторите попытку позже")
+    def site_error(self):
+        self.ui.label.setText("К сожалению, сайт недоступен, повторите попытку позже. Перезагрузите приложение!")
 
 
 class Table(QtWidgets.QWidget):
