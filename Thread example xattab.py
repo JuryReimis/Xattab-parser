@@ -56,9 +56,10 @@ class MyWindow(QtWidgets.QMainWindow):
         self.warning.setWindowModality(2)
         self.warning.show()
 
-    @QtCore.pyqtSlot(bool)
-    def table_call(self):
-        self.games = self.parser.Games.copy()
+    @QtCore.pyqtSlot(dict)
+    def table_call(self, dict):
+        print(self.thread_1.isFinished())
+        self.games = dict
         self.table = Table(mywindow=self, games=self.games)
         self.table.setWindowModality(1)
         self.table.table_creat()
@@ -76,7 +77,7 @@ class MyWindow(QtWidgets.QMainWindow):
 
 class Parser(QtCore.QObject):
     call_warning = QtCore.pyqtSignal(int)
-    call_table = QtCore.pyqtSignal(bool)
+    call_table = QtCore.pyqtSignal(dict)
     info_block = QtCore.pyqtSignal(int)
     def __init__(self, mywindow):
         super().__init__()
@@ -154,7 +155,6 @@ class Parser(QtCore.QObject):
             self.open_file()
         if self.mywindow.ui.tablecheck.isChecked():
             self.table_creat()
-        self.pause()
 
     def get_data(self, html):
         try:
@@ -217,20 +217,14 @@ class Parser(QtCore.QObject):
             self.mywindow.ui.opencheck.setChecked(False)
             return False
 
-
-
     def table_creat(self):
         self.mywindow.ui.parsing_status.setText("Создаю таблицу...")
         if self.mywindow.ui.tablecheck.isChecked():
-            self.call_table.emit(True)
+            self.call_table.emit(self.Games)
 
     def open_file(self):
         if self.mywindow.ui.opencheck.isChecked():
             os.startfile(self.file_path)
-
-    def pause(self):
-        while True:
-            pass
 
 class WarningMsg(QtWidgets.QWidget):
     def __init__(self, flag=0, last_page=None):
@@ -257,10 +251,10 @@ class WarningMsg(QtWidgets.QWidget):
 
 class Table(QtWidgets.QWidget):
     def __init__(self, mywindow, games):
+        super().__init__()
         self.Games = games
         print(self.Games)
         self.tablewindow = mywindow
-        super().__init__()
         self.ui_table = Ui_Table()
         self.ui_table.setupUi(self)
         self.columns = 6
