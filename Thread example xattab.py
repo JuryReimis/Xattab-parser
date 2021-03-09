@@ -22,7 +22,7 @@ class MyWindow(QtWidgets.QMainWindow):
         self.ui.setupUi(self)
 
         self.parser = Parser(mywindow=self)
-        self.thread_1 = QtCore.QThread()
+        self.thread_1 = QtCore.QThread(parent=self)
         self.parser.moveToThread(self.thread_1)
         self.signal.connect(self.parser.start)
         self.signal_input.connect(self.parser.input_line)
@@ -34,7 +34,6 @@ class MyWindow(QtWidgets.QMainWindow):
         self.ui.startbutton.clicked.connect(self.start_signal)
         self.ui.pagesbutton.clicked.connect(self.input_signal)
         self.ui.csvcreatcheck.clicked.connect(self.csv_signal)
-
         self.thread_1.start()
 
     def start_signal(self):
@@ -59,7 +58,9 @@ class MyWindow(QtWidgets.QMainWindow):
 
     @QtCore.pyqtSlot(bool)
     def table_call(self):
-        self.table = Table(mywindow=self, games=self.parser.Games)
+        self.games = self.parser.Games.copy()
+        self.table = Table(mywindow=self, games=self.games)
+        self.table.setWindowModality(1)
         self.table.table_creat()
         self.table.show()
 
@@ -77,8 +78,8 @@ class Parser(QtCore.QObject):
     call_warning = QtCore.pyqtSignal(int)
     call_table = QtCore.pyqtSignal(bool)
     info_block = QtCore.pyqtSignal(int)
-    def __init__(self, mywindow, parent=None):
-        super(Parser, self).__init__(parent)
+    def __init__(self, mywindow):
+        super().__init__()
         self.mywindow = mywindow
         self.user_agent = fake_useragent.UserAgent()
         self.headers = {
@@ -102,6 +103,7 @@ class Parser(QtCore.QObject):
     @QtCore.pyqtSlot(bool)
     def start(self):
         self.mywindow.ui.parsing_status.setText("Парсинг начинается!")
+        self.game_number = 1
         self.html = self.get_html(self.actual_link, self.pages)
         self.parser()
         self.mywindow.ui.parsing_status.setText("Операция завершена!")
@@ -139,6 +141,7 @@ class Parser(QtCore.QObject):
     def parser(self):
         self.mywindow.ui.parsing_status.setText("Парсинг страницы 1...")
         for page in range(1, self.pages + 1):
+            print(f"page {page}")
             self.get_data(self.get_html(link=self.actual_link, page=page))
             time.sleep(1)
             if page < self.pages:
@@ -151,13 +154,13 @@ class Parser(QtCore.QObject):
             self.open_file()
         if self.mywindow.ui.tablecheck.isChecked():
             self.table_creat()
+        self.pause()
 
     def get_data(self, html):
         try:
             for game in html.find_all("div", class_="entry_content"):
                 game_html = self.get_html(game.find("a")["href"])
                 b_name = (game_html.find("h1", class_="inner-entry__title").get_text().split("]"))[0]+"]"
-                print(f"{b_name} началась")
                 self.Games[b_name] = self.default.copy()
                 game_details = game_html.find("div", class_="inner-entry__details").get_text().split("\n")
                 year = game_details[1].replace('Год выпуска:  ', "").split()
@@ -193,15 +196,16 @@ class Parser(QtCore.QObject):
         self.pages = pages
 
     def writer_csv(self):
+        print("start of writing")
         self.mywindow.ui.parsing_status.setText("Записываю в файл...")
         with open(self.file_path, mode="w", newline="") as file:
-            headers = ["Игра", "number", "Год выхода", "Жанр", "Размер", "Таблетка", "Ссылка"]
-            writer = csv.DictWriter(file, delimiter=";", fieldnames=headers)
-            writer_game = csv.DictWriter(file, delimiter=";", lineterminator="", fieldnames=["Игра"])
-            writer.writeheader()
-            for item in self.Games.items():
-                writer_game.writerow({"Игра": item[0]})
-                writer.writerow(item[1])
+                headers = ["Игра", "number", "Год выхода", "Жанр", "Размер", "Таблетка", "Ссылка"]
+                writer = csv.DictWriter(file, delimiter=";", fieldnames=headers)
+                writer_game = csv.DictWriter(file, delimiter=";", lineterminator="", fieldnames=["Игра"])
+                writer.writeheader()
+                for item in self.Games.items():
+                    writer_game.writerow({"Игра": item[0]})
+                    writer.writerow(item[1])
 
     @QtCore.pyqtSlot(bool)
     def csv_creat(self):
@@ -224,10 +228,9 @@ class Parser(QtCore.QObject):
         if self.mywindow.ui.opencheck.isChecked():
             os.startfile(self.file_path)
 
-    print("parser is working")
-
-
-
+    def pause(self):
+        while True:
+            pass
 
 class WarningMsg(QtWidgets.QWidget):
     def __init__(self, flag=0, last_page=None):
@@ -255,6 +258,7 @@ class WarningMsg(QtWidgets.QWidget):
 class Table(QtWidgets.QWidget):
     def __init__(self, mywindow, games):
         self.Games = games
+        print(self.Games)
         self.tablewindow = mywindow
         super().__init__()
         self.ui_table = Ui_Table()
@@ -272,6 +276,7 @@ class Table(QtWidgets.QWidget):
         for row in self.Games.keys():
             column_now = 0
             for column in list(self.Games.items())[self.Games[row]["number"] - 1][1].keys():
+
                 if column == "Ссылка":
                     self.lable = QtWidgets.QLabel(self.ui_table.tableWidget)
                     self.lable.setText(f'<a href="{self.Games[row]["Ссылка"]}"> Ссылка </a>')
