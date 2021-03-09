@@ -164,10 +164,9 @@ class Parser(QtCore.QObject):
                 game_details = game_html.find("div", class_="inner-entry__details").get_text().split("\n")
                 year = game_details[1].replace('Год выпуска:  ', "").split()
                 for i in year:
-                    try:
-                        if i.isdigit() and int(i) // 1000 != 0:
-                            self.Games[b_name]["Год выхода"] = i
-                    except:
+                    if i.isdigit() and int(i) // 1000 != 0:
+                        self.Games[b_name]["Год выхода"] = i
+                    else:
                         self.Games[b_name]["Год выхода"] = "Не указано"
                 self.Games[b_name]["Жанр"] = game_details[2].split(": ")[1]
                 self.Games[b_name]["Размер"] = game_html.find("span", class_="entry__info-size").get_text()
@@ -224,6 +223,7 @@ class Parser(QtCore.QObject):
     def open_file(self):
         if self.mywindow.ui.opencheck.isChecked():
             os.startfile(self.file_path)
+
 
 class WarningMsg(QtWidgets.QWidget):
     def __init__(self, flag=0, last_page=None):
